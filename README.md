@@ -1,86 +1,75 @@
-# Reinforcement Learning-Based Packet Scheduling for QoS-Aware Network Routers
+# Reinforcement Learning-Based Packet Scheduling for QoS-Aware Routers
 
-## Project Overview
-This project implements an end-to-end reinforcement learning (RL) solution to optimize packet scheduling in a simulated network router. The RL agent is designed to make real-time queue selection decisions that respect the Quality of Service (QoS) requirements of multiple traffic classes: video, voice, and best-effort data.
+This project studies packet scheduling in a single-router setting with three traffic classes:
+- `Q1`: video (delay-constrained)
+- `Q2`: voice (delay-constrained)
+- `Q3`: best-effort (fairness-focused)
 
-## Problem Statement
-We address the problem of packet scheduling in a router handling three traffic classes:
-- **Video (Q1)**, 
-- **Voice (Q2)**, and 
-- **Best-effort (Q3)**
+A tabular Q-learning agent is trained to select which queue to serve at each time slot and is compared against standard baselines.
 
-Each queue receives fixed-length packets independently based on a Bernoulli process. The router transmits at most one packet per time-slot. Queues Q1 and Q2 have strict **mean delay constraints** (R1 and R2), while Q3 has no formal deadline but should be served fairly to prevent starvation.
+## Repository Contents
+- `training_analysis.ipynb`: main implementation, training loop, and analysis plots
+- `requirements.txt`: core Python dependencies
+- `README.md`: project documentation
 
-The scheduler selects a queue to serve at every time-slot. The **RL policy** is learned to:
-- Meet delay constraints for Q1 and Q2
-- Minimize average delay for Q3
-- Adapt to two scheduling scenarios:
-  - No switch penalty
-  - One-slot switch penalty
+## Problem Setup
+- Time-slotted router model with at most one packet served per slot
+- Independent Bernoulli arrivals per queue with configurable rates
+- Delay requirements:
+  - `R1 = 6` for `Q1`
+  - `R2 = 4` for `Q2`
+  - no hard delay bound for `Q3`
 
-This mirrors real-world QoS-aware scheduling requirements in modern routers.
+Two scenarios are evaluated:
+1. **Scenario 1 (no switch cost):** selected queue is served immediately
+2. **Scenario 2 (one-slot switch cost):** switching queues consumes one slot without service
 
-## Technical Approach
+## RL Formulation
+- **State:** 6-dimensional discrete vector built from `Q1` and `Q2` features
+  - queue-length bin
+  - deadline-violation flag
+  - delay bin from rolling mean delay
+- **Action:** `0/1/2` to serve `Q1/Q2/Q3`
+- **Algorithm:** tabular Q-learning with epsilon-greedy exploration
+- **Reward:** combines delay-compliance terms for `Q1/Q2`, a service bonus for `Q3`, and a backlog-reduction term
 
-### Environment Simulation
-Implemented a custom OpenAI Gym environment simulating a router with three queues. Features include:
-- Queue state tracking and reward calculation
-- Scenario support for instant or delayed switching
-- Configurable traffic rates and seeds
-
-### State Space
-The environment state is modeled as a 6-dimensional vector capturing:
-- Queue lengths
-- Delay violations
-- Rolling average delays
-
-This provides a comprehensive snapshot of system conditions at each time step.
-
-### Action Space
-The agent can:
-- Select one of the three queues to transmit from
-- Stay in the current queue or switch (cost applied if scenario 2)
-
-### Reward Function
-Reward design includes:
-- Penalty for delay violations in Q1 and Q2
-- Positive reward for servicing Q3 to promote fairness
-- Encouragement for reducing queue backlog
-
-The function is tuned to balance strict delay compliance and fairness.
-
-### RL Algorithm
-Used **Tabular Q-learning** with ε-greedy exploration. The agent was trained over multiple episodes with:
-- Learning rate tuning
-- Discount factor optimization
-- Decay control for exploration
-
-## Evaluation and Baseline Comparison
-The RL policy was evaluated against:
-- FIFO (First-in, First-out)
+## Baselines
+The RL policy is compared with:
+- Random
 - EDF (Earliest Deadline First)
-- Sequential Priority
+- Priority (`Q1 > Q2 > Q3`)
+- FIFO (oldest packet first across queues)
 
-Metrics analyzed:
-- Mean delay per queue
-- Packet drop rate
-- Queue fairness index
+## Setup
+Use Python 3.9+.
 
-### Results
-- Q1 and Q2 delays consistently below R1 and R2
-- RL showed better delay balancing than FIFO/SP, especially for Q3
-- RL policy adapts to bursty traffic and queue penalties efficiently
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install pandas jupyter
+```
 
-## Independent Evaluation
-- Tested performance under unseen traffic rates and patterns
-- Compared results to literature-defined thresholds
-- Discussed practical deployment feasibility on real-time router hardware
+Note: the notebook imports `pandas`, which is not currently listed in `requirements.txt`.
 
-## Tech Stack
-- Python
-- OpenAI Gym (custom environment)
-- NumPy, Matplotlib
-- GitHub for version control
+## Run the Experiments
+Launch Jupyter and run all cells in `training_analysis.ipynb`:
 
-## Outcome
-This project demonstrates the application of reinforcement learning to solve a challenging network-level scheduling problem. The solution maintains delay constraints, adapts to dynamic loads, and provides fair queue servicing — all in a resource-efficient and interpretable framework.
+```bash
+jupyter notebook training_analysis.ipynb
+```
+
+The notebook will:
+- train for both scenarios (`EPISODES=50000`, `MAX_STEPS=1000`)
+- plot training rewards
+- print balanced-load delay comparisons vs baselines
+- evaluate robustness under `light`, `moderate`, `heavy`, and `extreme` traffic profiles
+- plot RL delay trends across traffic profiles
+
+## Reproducibility
+The notebook sets a fixed seed (`SEED = 42`) for Python `random` and NumPy.
+
+## Notes and Limitations
+- The full workflow currently lives in a notebook (no separate Python package/module yet).
+- Queue 3 fairness is encouraged by reward shaping rather than an explicit formal guarantee.
+- Long training runs may take significant time on CPU.
